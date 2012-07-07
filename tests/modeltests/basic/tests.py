@@ -9,14 +9,9 @@ from django.utils.translation import ugettext_lazy
 
 from .models import Article
 
-
-class ModelTest(TestCase):
-
-    def test_lookup(self):
-        # No articles are in the system yet.
-        self.assertQuerysetEqual(Article.objects.all(), [])
-
-        # Create an Article.
+class SingleModelTest(TestCase):
+    def setUp(self):
+        # Create an Article for use in the tests:
         a = Article(
             id=None,
             headline='Area man programs in Python',
@@ -25,6 +20,14 @@ class ModelTest(TestCase):
 
         # Save it into the database. You have to call save() explicitly.
         a.save()
+
+        self.test_model = a
+
+    def test_model_instance_updated_correctly_after_save(self):
+        """
+        Ensure that after saving, the model instance has been updated.
+        """
+        a = self.test_model
 
         # Now it has an ID.
         self.assertTrue(a.id != None)
@@ -37,6 +40,12 @@ class ModelTest(TestCase):
         self.assertEqual(a.headline, 'Area man programs in Python')
         self.assertEqual(a.pub_date, datetime(2005, 7, 28, 0, 0))
 
+    def test_model_updated_in_database(self):
+        """
+        Ensure that after updating an attribute and saving, newly loaded instances have th updated value.
+        """
+        a = self.test_model
+
         # Change values by changing the attributes, then calling save().
         a.headline = 'Area woman programs in Python'
         a.save()
@@ -45,21 +54,31 @@ class ModelTest(TestCase):
         self.assertQuerysetEqual(Article.objects.all(),
             ['<Article: Area woman programs in Python>'])
 
-        # Django provides a rich database lookup API.
+    def test_model_objects_get(self):
+        """
+        Ensure that the saved instance can be loaded from the database using get on its attribute values.
+        """
+        a = self.test_model
+
         self.assertEqual(Article.objects.get(id__exact=a.id), a)
-        self.assertEqual(Article.objects.get(headline__startswith='Area woman'), a)
+        self.assertEqual(Article.objects.get(headline__startswith='Area man'), a)
         self.assertEqual(Article.objects.get(pub_date__year=2005), a)
         self.assertEqual(Article.objects.get(pub_date__year=2005, pub_date__month=7), a)
         self.assertEqual(Article.objects.get(pub_date__year=2005, pub_date__month=7, pub_date__day=28), a)
         self.assertEqual(Article.objects.get(pub_date__week_day=5), a)
-
         # The "__exact" lookup type can be omitted, as a shortcut.
         self.assertEqual(Article.objects.get(id=a.id), a)
-        self.assertEqual(Article.objects.get(headline='Area woman programs in Python'), a)
+        self.assertEqual(Article.objects.get(headline='Area man programs in Python'), a)
+
+    def test_model_objects_filter(self):
+        """
+        Ensure that filtering on attribute values return the expected model instances.
+        """
+        a = self.test_model
 
         self.assertQuerysetEqual(
             Article.objects.filter(pub_date__year=2005),
-            ['<Article: Area woman programs in Python>'],
+            ['<Article: Area man programs in Python>'],
         )
         self.assertQuerysetEqual(
             Article.objects.filter(pub_date__year=2004),
@@ -67,17 +86,25 @@ class ModelTest(TestCase):
         )
         self.assertQuerysetEqual(
             Article.objects.filter(pub_date__year=2005, pub_date__month=7),
-            ['<Article: Area woman programs in Python>'],
+            ['<Article: Area man programs in Python>'],
         )
 
         self.assertQuerysetEqual(
             Article.objects.filter(pub_date__week_day=5),
-            ['<Article: Area woman programs in Python>'],
+            ['<Article: Area man programs in Python>'],
         )
         self.assertQuerysetEqual(
             Article.objects.filter(pub_date__week_day=6),
             [],
         )
+        # pk can be used as a shortcut for the primary key name in any query.
+        self.assertQuerysetEqual(Article.objects.filter(pk__in=[a.id]),
+            ["<Article: Area man programs in Python>"])
+
+    def test_model_get_exceptions(self):
+        """
+        Ensure that the correct exceptions and error messages are raised when get cannot load the requested object.
+        """
 
         # Django raises an Article.DoesNotExist exception for get() if the
         # parameters don't match any object.
@@ -113,19 +140,23 @@ class ModelTest(TestCase):
             pub_date__week_day=6,
         )
 
-        # Lookup by a primary key is the most common case, so Django
-        # provides a shortcut for primary-key exact lookups.
-        # The following is identical to articles.get(id=a.id).
+    def test_model_instances_with_identical_type_and_id_considered_equal(self):
+        """
+        Ensure model instances of the same type and same ID are considered equal.
+        """
+        article1 = Article.objects.get(pk=self.test_model.id)
+        article2 = Article.objects.get(pk=self.test_model.id)
+        self.assertEqual(article1, article2)
+
+    def test_loaded_model_is_equal_to_original_instance(self):
+        """
+        Ensure that a model loaded from the database is considered equal to the original instance.
+        """
+        a = self.test_model
         self.assertEqual(Article.objects.get(pk=a.id), a)
 
-        # pk can be used as a shortcut for the primary key name in any query.
-        self.assertQuerysetEqual(Article.objects.filter(pk__in=[a.id]),
-            ["<Article: Area woman programs in Python>"])
 
-        # Model instances of the same type and same ID are considered equal.
-        a = Article.objects.get(pk=a.id)
-        b = Article.objects.get(pk=a.id)
-        self.assertEqual(a, b)
+class ModelTest(TestCase):
 
     def test_object_creation(self):
         # Create an Article.
