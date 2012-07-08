@@ -8,12 +8,12 @@ from .models import Person, Book, Car, PersonManager, PublishedBookManager
 class CustomManagerTests(TestCase):
     def setUp(self):
         p1 = Person.objects.create(first_name="Bugs", last_name="Bunny", fun=True)
-        p2 = Person.objects.create(first_name="Droopy", last_name="Dog", fun=False)
+        self.p2 = Person.objects.create(first_name="Droopy", last_name="Dog", fun=False)
 
         b1 = Book.published_objects.create(
             title="How to program", author="Rodney Dangerfield", is_published=True
         )
-        b2 = Book.published_objects.create(
+        self.b2 = Book.published_objects.create(
             title="How to be smart", author="Albert Einstein", is_published=False
         )
         c1 = Car.cars.create(name="Corvette", mileage=21, top_speed=180)
@@ -22,7 +22,7 @@ class CustomManagerTests(TestCase):
     def test_custom_manager_is_correct_type(self):
         # The RelatedManager used on the 'books' descriptor extends the default
         # manager
-        self.assertTrue(isinstance(p2.books, PublishedBookManager))
+        self.assertTrue(isinstance(self.p2.books, PublishedBookManager))
 
     def test_custom_manager_method(self):
         self.assertQuerysetEqual(
@@ -40,7 +40,7 @@ class CustomManagerTests(TestCase):
     def test_related_manager_extends_default_manager(self):
         # The RelatedManager used on the 'authors' descriptor extends the
         # default manager
-        self.assertTrue(isinstance(b2.authors, PersonManager))
+        self.assertTrue(isinstance(self.b2.authors, PersonManager))
 
     def test_assert_custom_manager_all_method_called_correctly(self):
         self.assertQuerysetEqual(
