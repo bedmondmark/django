@@ -38,7 +38,7 @@ class CustomManagerTests(TestCase):
         self.assertRaises(AttributeError, lambda: Book.objects)
 
     def test_related_manager_extends_default_manager(self):
-        The RelatedManager used on the 'authors' descriptor extends the
+        # The RelatedManager used on the 'authors' descriptor extends the
         # default manager
         self.assertTrue(isinstance(b2.authors, PersonManager))
 
