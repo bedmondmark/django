@@ -10,6 +10,10 @@ from django.utils.translation import ugettext_lazy
 from .models import Article
 
 class SingleModelTest(TestCase):
+    """
+    A bunch of basic tests that work with a single model instance.
+    """
+
     def setUp(self):
         # Create an Article for use in the tests:
         a = Article(
@@ -165,14 +169,18 @@ class SingleModelTest(TestCase):
 
 
 class TestModelInstantiation(TestCase):
+    """
+    A bunch of tests which test model instantiation.
+    """
+
     def test_model_instantiation_with_positional_params(self):
         """
         Ensure you can initialize a model instance using positional arguments.
         """
-        a2 = Article(None, 'Second article', datetime(2005, 7, 29))
-        a2.save()
-        self.assertEqual(a2.headline, 'Second article')
-        self.assertEqual(a2.pub_date, datetime(2005, 7, 29, 0, 0))
+        article = Article(None, 'Second article', datetime(2005, 7, 29))
+        article.save()
+        self.assertEqual(article.headline, 'Second article')
+        self.assertEqual(article.pub_date, datetime(2005, 7, 29, 0, 0))
 
     def test_model_instances_unique(self):
         """
@@ -274,24 +282,9 @@ class TestModelInstantiation(TestCase):
             datetime(2005, 7, 31, 12, 30, 45))
 
 
-
-        # Check that != and == operators behave as expecte on instances
-        self.assertTrue(a1 != a2)
-        self.assertFalse(a1 == a2)
-        self.assertEqual(a2, Article.objects.get(id__exact=a2.id))
-
-        self.assertTrue(Article.objects.get(id__exact=a2.id) != Article.objects.get(id__exact=a1.id))
-        self.assertFalse(Article.objects.get(id__exact=a2.id) == Article.objects.get(id__exact=a1.id))
-
-        # You can use 'in' to test for membership...
-        self.assertTrue(a2 in Article.objects.all())
-
-        # ... but there will often be more efficient ways if that is all you need:
-        self.assertTrue(Article.objects.filter(id=a2.id).exists())
-
 class ObjectDateTest(TestCase):
     def setUp(self):
-        # Create a bunch of articles published on sequential days:
+        # Create four articles published on sequential days:
         for i, d in enumerate(range(28, 32)):
             article = Article(
                 headline = "Article {0}".format(i+1),
@@ -380,99 +373,86 @@ class MultipleModelTest(TestCase):
     def setUp(self):
         self.a1 = Article(None, 'Article 1', datetime(2005, 7, 31, 12, 28))
         self.a2 = Article(None, 'Article 2', datetime(2005, 7, 31, 12, 29))
+        self.a3 = Article(None, 'Article 3', datetime(2005, 7, 31, 12, 30))
         self.a1.save()
         self.a2.save()
-        Article(None, 'Article 3', datetime(2005, 7, 31, 12, 30)).save()
+        self.a3.save()
         Article(None, 'Article 4', datetime(2005, 7, 31, 12, 31)).save()
 
+        self.s1 = Article.objects.filter(id__exact=self.a1.id)
+        self.s2 = Article.objects.filter(id__exact=self.a2.id)
+        self.s3 = Article.objects.filter(id__exact=self.a3.id)
+
     def test_combine_queries_with_or(self):
-        s1 = Article.objects.filter(id__exact=self.a1.id)
-        s2 = Article.objects.filter(id__exact=self.a2.id)
-        self.assertQuerysetEqual(s1 | s2,
+        self.assertQuerysetEqual(self.s1 | self.s2,
             ["<Article: Article 1>",
              "<Article: Article 2>"])
 
     def test_combine_queries_with_and(self):
-        s1 = Article.objects.filter(id__exact=self.a1.id)
-        s2 = Article.objects.filter(id__exact=self.a2.id)
-        self.assertQuerysetEqual(s1 & s2, [])
+        self.assertQuerysetEqual(self.s1 & self.s2, [])
 
-class ModelTest(TestCase):
-    def test_function(self):
-        # You can combine queries with & and |.
-        s1 = Article.objects.filter(id__exact=a.id)
-        s2 = Article.objects.filter(id__exact=a2.id)
-        self.assertQuerysetEqual(s1 | s2,
-            ["<Article: Area man programs in Python>",
-             "<Article: Second article>"])
-        self.assertQuerysetEqual(s1 & s2, [])
-
+    def test_get_queryset_len(self):
         # You can get the number of objects like this:
-        self.assertEqual(len(Article.objects.filter(id__exact=a.id)), 1)
+        self.assertEqual(len(Article.objects.filter(id__exact=self.a1.id)), 1)
 
-        # You can get items using index and slice notation.
-        self.assertEqual(Article.objects.all()[0], a)
+    def test_queryset_indexes(self):
+        self.assertEqual(Article.objects.all()[0], self.a1)
+
+    def test_queryset_slicing_with_ints(self):
         self.assertQuerysetEqual(Article.objects.all()[1:3],
-            ["<Article: Second article>", "<Article: Third article>"])
+            ["<Article: Article 2>", "<Article: Article 3>"])
+        self.assertQuerysetEqual((self.s1 | self.s2 | self.s3)[::2],
+            ["<Article: Article 1>",
+             "<Article: Article 3>"])
 
-        s3 = Article.objects.filter(id__exact=a3.id)
-        self.assertQuerysetEqual((s1 | s2 | s3)[::2],
-            ["<Article: Area man programs in Python>",
-             "<Article: Third article>"])
-
-        # Slicing works with longs.
-        self.assertEqual(Article.objects.all()[0L], a)
+    def test_queryset_slicing_with_longs(self):
+        self.assertEqual(Article.objects.all()[0L], self.a1)
         self.assertQuerysetEqual(Article.objects.all()[1L:3L],
-            ["<Article: Second article>", "<Article: Third article>"])
-        self.assertQuerysetEqual((s1 | s2 | s3)[::2L],
-            ["<Article: Area man programs in Python>",
-             "<Article: Third article>"])
+            ["<Article: Article 2>", "<Article: Article 3>"])
+        self.assertQuerysetEqual((self.s1 | self.s2 | self.s3)[::2L],
+            ["<Article: Article 1>",
+             "<Article: Article 3>"])
 
+    def test_queryset_slicing_with_mixed_types(self):
         # And can be mixed with ints.
         self.assertQuerysetEqual(Article.objects.all()[1:3L],
-            ["<Article: Second article>", "<Article: Third article>"])
+            ["<Article: Article 2>", "<Article: Article 3>"])
 
+    def test_queryset_slice_filter(self):
         # Slices (without step) are lazy:
         self.assertQuerysetEqual(Article.objects.all()[0:5].filter(),
-            ["<Article: Area man programs in Python>",
-             "<Article: Second article>",
-             "<Article: Third article>",
-             "<Article: Article 6>",
-             "<Article: Default headline>"])
+            ["<Article: Article 1>",
+             "<Article: Article 2>",
+             "<Article: Article 3>",
+             "<Article: Article 4>"])
 
+    def test_slicing_queryset_slices(self):
         # Slicing again works:
-        self.assertQuerysetEqual(Article.objects.all()[0:5][0:2],
-            ["<Article: Area man programs in Python>",
-             "<Article: Second article>"])
-        self.assertQuerysetEqual(Article.objects.all()[0:5][:2],
-            ["<Article: Area man programs in Python>",
-             "<Article: Second article>"])
-        self.assertQuerysetEqual(Article.objects.all()[0:5][4:],
-            ["<Article: Default headline>"])
-        self.assertQuerysetEqual(Article.objects.all()[0:5][5:], [])
+        self.assertQuerysetEqual(Article.objects.all()[0:4][0:2],
+            ["<Article: Article 1>",
+             "<Article: Article 2>"])
+        self.assertQuerysetEqual(Article.objects.all()[0:4][:2],
+            ["<Article: Article 1>",
+             "<Article: Article 2>"])
+        self.assertQuerysetEqual(Article.objects.all()[0:4][3:],
+            ["<Article: Article 4>"])
+        self.assertQuerysetEqual(Article.objects.all()[0:4][4:], [])
 
         # Some more tests!
-        self.assertQuerysetEqual(Article.objects.all()[2:][0:2],
-            ["<Article: Third article>", "<Article: Article 6>"])
-        self.assertQuerysetEqual(Article.objects.all()[2:][:2],
-            ["<Article: Third article>", "<Article: Article 6>"])
-        self.assertQuerysetEqual(Article.objects.all()[2:][2:3],
-            ["<Article: Default headline>"])
+        self.assertQuerysetEqual(Article.objects.all()[1:][0:2],
+            ["<Article: Article 2>", "<Article: Article 3>"])
+        self.assertQuerysetEqual(Article.objects.all()[1:][:2],
+            ["<Article: Article 2>", "<Article: Article 3>"])
+        self.assertQuerysetEqual(Article.objects.all()[1:][1:2],
+            ["<Article: Article 3>"])
 
         # Using an offset without a limit is also possible.
-        self.assertQuerysetEqual(Article.objects.all()[5:],
-            ["<Article: Fourth article>",
-             "<Article: Article 7>",
-             "<Article: Updated article 8>"])
+        self.assertQuerysetEqual(Article.objects.all()[1:],
+            ["<Article: Article 2>",
+             "<Article: Article 3>",
+             "<Article: Article 4>"])
 
-        # Also, once you have sliced you can't filter, re-order or combine
-        self.assertRaisesRegexp(
-            AssertionError,
-            "Cannot filter a query once a slice has been taken.",
-            Article.objects.all()[0:5].filter,
-            id=a.id,
-        )
-
+    def test_reorder_slice_exception(self):
         self.assertRaisesRegexp(
             AssertionError,
             "Cannot reorder a query once a slice has been taken.",
@@ -480,59 +460,76 @@ class ModelTest(TestCase):
             'id',
         )
 
-        try:
-            Article.objects.all()[0:1] & Article.objects.all()[4:5]
-            self.fail('Should raise an AssertionError')
-        except AssertionError as e:
-            self.assertEqual(str(e), "Cannot combine queries once a slice has been taken.")
-        except Exception as e:
-            self.fail('Should raise an AssertionError, not %s' % e)
+    def test_filter_slice_exception(self):
+        self.assertRaisesRegexp(
+            AssertionError,
+            "Cannot filter a query once a slice has been taken.",
+            Article.objects.all()[0:5].filter,
+            id=self.a1.id,
+        )
 
+    def test_combine_slice_exception(self):
+        self.assertRaisesRegexp(
+            AssertionError,
+            "Cannot combine queries once a slice has been taken.",
+            lambda: Article.objects.all()[0:1] & Article.objects.all()[4:5],
+        )
+
+    def test_negative_slice_exception(self):
         # Negative slices are not supported, due to database constraints.
         # (hint: inverting your ordering might do what you need).
-        try:
-            Article.objects.all()[-1]
-            self.fail('Should raise an AssertionError')
-        except AssertionError as e:
-            self.assertEqual(str(e), "Negative indexing is not supported.")
-        except Exception as e:
-            self.fail('Should raise an AssertionError, not %s' % e)
+        self.assertRaisesRegexp(
+            AssertionError,
+            "Negative indexing is not supported.",
+            lambda: Article.objects.all()[-1]
+        )
 
-        error = None
-        try:
-            Article.objects.all()[0:-5]
-        except Exception as e:
-            error = e
-        self.assertTrue(isinstance(error, AssertionError))
-        self.assertEqual(str(error), "Negative indexing is not supported.")
-
+    def test_article_instance_has_no_objects_attribute(self):
         # An Article instance doesn't have access to the "objects" attribute.
         # That's only available on the class.
         self.assertRaisesRegexp(
             AttributeError,
             "Manager isn't accessible via Article instances",
             getattr,
-            a7,
+            self.a1,
             "objects",
         )
 
+    def test_bulk_delete(self):
         # Bulk delete test: How many objects before and after the delete?
         self.assertQuerysetEqual(Article.objects.all(),
-            ["<Article: Area man programs in Python>",
-             "<Article: Second article>",
-             "<Article: Third article>",
-             "<Article: Article 6>",
-             "<Article: Default headline>",
-             "<Article: Fourth article>",
-             "<Article: Article 7>",
-             "<Article: Updated article 8>"])
-        Article.objects.filter(id__lte=a4.id).delete()
-        self.assertQuerysetEqual(Article.objects.all(),
-            ["<Article: Article 6>",
-             "<Article: Default headline>",
-             "<Article: Article 7>",
-             "<Article: Updated article 8>"])
+            ["<Article: Article 1>",
+             "<Article: Article 2>",
+             "<Article: Article 3>",
+             "<Article: Article 4>"])
 
+        Article.objects.filter(id__lte=self.a2.id).delete()
+        self.assertQuerysetEqual(Article.objects.all(),
+            ["<Article: Article 3>",
+             "<Article: Article 4>"])
+
+    def test_instance_equality(self):
+        # Check that != and == operators behave as expected on instances
+        a1 = self.a1
+        a2 = self.a2
+
+        self.assertTrue(a1 != a2)
+        self.assertFalse(a1 == a2)
+        self.assertEqual(a2, Article.objects.get(id__exact=a2.id))
+
+        self.assertTrue(Article.objects.get(id__exact=a2.id) != Article.objects.get(id__exact=a1.id))
+        self.assertFalse(Article.objects.get(id__exact=a2.id) == Article.objects.get(id__exact=a1.id))
+
+    def test_in_operator_with_queryset(self):
+        # You can use 'in' to test for membership...
+        self.assertTrue(self.a2 in Article.objects.all())
+
+    def test_queryset_exists(self):
+        # there will often be more efficient ways if that is all you need:
+        self.assertTrue(Article.objects.filter(id=self.a2.id).exists())
+
+
+class ModelTest(TestCase):
     @skipUnlessDBFeature('supports_microsecond_precision')
     def test_microsecond_precision(self):
         # In PostgreSQL, microsecond-level precision is available.
