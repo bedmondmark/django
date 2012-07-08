@@ -40,19 +40,27 @@ class SingleModelTest(TestCase):
         self.assertEqual(a.headline, 'Area man programs in Python')
         self.assertEqual(a.pub_date, datetime(2005, 7, 28, 0, 0))
 
-    def test_model_updated_in_database(self):
+    def test_model_updating_in_database(self):
         """
-        Ensure that after updating an attribute and saving, newly loaded instances have th updated value.
+        Ensure that after updating an attribute and saving, newly loaded instances have the updated value.
         """
         a = self.test_model
+
+        # Saving an object again doesn't create a new object -- it just saves
+        # the old one.
+        current_id = a.id
+        a.save()
+        self.assertEqual(a.id, current_id)
 
         # Change values by changing the attributes, then calling save().
         a.headline = 'Area woman programs in Python'
         a.save()
 
+        self.assertEqual(a.id, current_id)
         # Article.objects.all() returns all the articles in the database.
         self.assertQuerysetEqual(Article.objects.all(),
             ['<Article: Area woman programs in Python>'])
+
 
     def test_model_objects_get(self):
         """
@@ -156,29 +164,30 @@ class SingleModelTest(TestCase):
         self.assertEqual(Article.objects.get(pk=a.id), a)
 
 
-class ModelTest(TestCase):
+class TestModelInstantiation(TestCase):
+    def test_model_instantiation_with_positional_params(self):
+        """
+        Ensure you can initialize a model instance using positional arguments.
+        """
+        a2 = Article(None, 'Second article', datetime(2005, 7, 29))
+        a2.save()
+        self.assertEqual(a2.headline, 'Second article')
+        self.assertEqual(a2.pub_date, datetime(2005, 7, 29, 0, 0))
 
-    def test_object_creation(self):
-        # Create an Article.
+    def test_model_instances_unique(self):
+        """
+        Ensure that models are saved with unique ids.
+        """
         a = Article(
             id=None,
             headline='Area man programs in Python',
             pub_date=datetime(2005, 7, 28),
         )
-
-        # Save it into the database. You have to call save() explicitly.
         a.save()
 
-        # You can initialize a model instance using positional arguments,
-        # which should match the field order as defined in the model.
         a2 = Article(None, 'Second article', datetime(2005, 7, 29))
         a2.save()
 
-        self.assertNotEqual(a2.id, a.id)
-        self.assertEqual(a2.headline, 'Second article')
-        self.assertEqual(a2.pub_date, datetime(2005, 7, 29, 0, 0))
-
-        # ...or, you can use keyword arguments.
         a3 = Article(
             id=None,
             headline='Third article',
@@ -186,18 +195,37 @@ class ModelTest(TestCase):
         )
         a3.save()
 
+        self.assertNotEqual(a2.id, a.id)
         self.assertNotEqual(a3.id, a.id)
         self.assertNotEqual(a3.id, a2.id)
-        self.assertEqual(a3.headline, 'Third article')
-        self.assertEqual(a3.pub_date, datetime(2005, 7, 30, 0, 0))
 
+    def test_model_instantiation_with_named_params(self):
+        """
+        Ensure instances can be created using named params.
+        """
+        a = Article(
+            id=None,
+            headline='Third article',
+            pub_date=datetime(2005, 7, 30),
+        )
+        a.save()
+        self.assertEqual(a.headline, 'Third article')
+        self.assertEqual(a.pub_date, datetime(2005, 7, 30, 0, 0))
+
+    def test_model_instantiation_with_mixed_params(self):
+        """
+        Ensure instances can be created using mixed params.
+        """
         # You can also mix and match position and keyword arguments, but
         # be sure not to duplicate field information.
-        a4 = Article(None, 'Fourth article', pub_date=datetime(2005, 7, 31))
-        a4.save()
-        self.assertEqual(a4.headline, 'Fourth article')
+        a = Article(None, 'Fourth article', pub_date=datetime(2005, 7, 31))
+        a.save()
+        self.assertEqual(a.headline, 'Fourth article')
 
-        # Don't use invalid keyword arguments.
+    def test_model_instantiation_with_invalid_keyword_arguments(self):
+        """
+        Attempting to instantiate a model with an invalid keyword argument raises a TypeError.
+        """
         self.assertRaisesRegexp(
             TypeError,
             "'foo' is an invalid keyword argument for this function",
@@ -208,61 +236,73 @@ class ModelTest(TestCase):
             foo='bar',
         )
 
-        # You can leave off the value for an AutoField when creating an
-        # object, because it'll get filled in automatically when you save().
-        a5 = Article(headline='Article 6', pub_date=datetime(2005, 7, 31))
-        a5.save()
-        self.assertEqual(a5.headline, 'Article 6')
+    def test_autofield_set_when_missing_from_constructor_call(self):
+        """
+        You can leave off the value for an AutoField when creating an object, because it'll get filled in automatically when you save().
+        """
+        # id is an autofield, and is not provided in the following call:
+        a = Article(headline='Article 6', pub_date=datetime(2005, 7, 31))
+        a.save()
+        self.assertEqual(a.headline, 'Article 6')
 
-        # If you leave off a field with "default" set, Django will use
-        # the default.
-        a6 = Article(pub_date=datetime(2005, 7, 31))
-        a6.save()
-        self.assertEqual(a6.headline, 'Default headline')
+    def test_default_field_set_when_missing_from_constructor_call(self):
+        """
+        Ensure that if you leave off a field with "default" set, Django will use the default.
+        """
+        a = Article(pub_date=datetime(2005, 7, 31))
+        a.save()
+        self.assertEqual(a.headline, 'Default headline')
 
-        # For DateTimeFields, Django saves as much precision (in seconds)
-        # as you give it.
-        a7 = Article(
+    def test_partial_datetime_params(self):
+        """
+        Ensure that Django stores imprecise datetime information.
+        """
+        a1 = Article(
             headline='Article 7',
             pub_date=datetime(2005, 7, 31, 12, 30),
         )
-        a7.save()
-        self.assertEqual(Article.objects.get(id__exact=a7.id).pub_date,
+        a1.save()
+        self.assertEqual(Article.objects.get(id__exact=a1.id).pub_date,
             datetime(2005, 7, 31, 12, 30))
 
-        a8 = Article(
+        a2 = Article(
             headline='Article 8',
             pub_date=datetime(2005, 7, 31, 12, 30, 45),
         )
-        a8.save()
-        self.assertEqual(Article.objects.get(id__exact=a8.id).pub_date,
+        a2.save()
+        self.assertEqual(Article.objects.get(id__exact=a2.id).pub_date,
             datetime(2005, 7, 31, 12, 30, 45))
 
-        # Saving an object again doesn't create a new object -- it just saves
-        # the old one.
-        current_id = a8.id
-        a8.save()
-        self.assertEqual(a8.id, current_id)
-        a8.headline = 'Updated article 8'
-        a8.save()
-        self.assertEqual(a8.id, current_id)
+
 
         # Check that != and == operators behave as expecte on instances
-        self.assertTrue(a7 != a8)
-        self.assertFalse(a7 == a8)
-        self.assertEqual(a8, Article.objects.get(id__exact=a8.id))
+        self.assertTrue(a1 != a2)
+        self.assertFalse(a1 == a2)
+        self.assertEqual(a2, Article.objects.get(id__exact=a2.id))
 
-        self.assertTrue(Article.objects.get(id__exact=a8.id) != Article.objects.get(id__exact=a7.id))
-        self.assertFalse(Article.objects.get(id__exact=a8.id) == Article.objects.get(id__exact=a7.id))
+        self.assertTrue(Article.objects.get(id__exact=a2.id) != Article.objects.get(id__exact=a1.id))
+        self.assertFalse(Article.objects.get(id__exact=a2.id) == Article.objects.get(id__exact=a1.id))
 
         # You can use 'in' to test for membership...
-        self.assertTrue(a8 in Article.objects.all())
+        self.assertTrue(a2 in Article.objects.all())
 
         # ... but there will often be more efficient ways if that is all you need:
-        self.assertTrue(Article.objects.filter(id=a8.id).exists())
+        self.assertTrue(Article.objects.filter(id=a2.id).exists())
 
-        # dates() returns a list of available dates of the given scope for
-        # the given field.
+class ObjectDateTest(TestCase):
+    def setUp(self):
+        # Create a bunch of articles published on sequential days:
+        for i, d in enumerate(range(28, 32)):
+            article = Article(
+                headline = "Article {0}".format(i+1),
+                pub_date = datetime(2005, 7, d)
+            )
+            article.save()
+
+    def test_objects_dates(self):
+        """
+        Ensure dates() returns a list of available dates of the given scope for the given field.
+        """
         self.assertQuerysetEqual(
             Article.objects.dates('pub_date', 'year'),
             ["datetime.datetime(2005, 1, 1, 0, 0)"])
@@ -288,7 +328,23 @@ class ModelTest(TestCase):
              "datetime.datetime(2005, 7, 29, 0, 0)",
              "datetime.datetime(2005, 7, 28, 0, 0)"])
 
-        # dates() requires valid arguments.
+    def test_objects_dates_iterator(self):
+        """
+        Ensure dates iterator method works.
+        """
+        dates = []
+        for article in Article.objects.dates('pub_date', 'day', order='DESC').iterator():
+            dates.append(article)
+        self.assertEqual(dates, [
+            datetime(2005, 7, 31, 0, 0),
+            datetime(2005, 7, 30, 0, 0),
+            datetime(2005, 7, 29, 0, 0),
+            datetime(2005, 7, 28, 0, 0)])
+
+    def test_objects_dates_exceptions(self):
+        """
+        Ensure calling dates() with invalid arguments raises the correct exceptions.
+        """
         self.assertRaisesRegexp(
             TypeError,
             "dates\(\) takes at least 3 arguments \(1 given\)",
@@ -320,17 +376,29 @@ class ModelTest(TestCase):
             order="bad order",
         )
 
-        # Use iterator() with dates() to return a generator that lazily
-        # requests each result one at a time, to save memory.
-        dates = []
-        for article in Article.objects.dates('pub_date', 'day', order='DESC').iterator():
-            dates.append(article)
-        self.assertEqual(dates, [
-            datetime(2005, 7, 31, 0, 0),
-            datetime(2005, 7, 30, 0, 0),
-            datetime(2005, 7, 29, 0, 0),
-            datetime(2005, 7, 28, 0, 0)])
+class MultipleModelTest(TestCase):
+    def setUp(self):
+        self.a1 = Article(None, 'Article 1', datetime(2005, 7, 31, 12, 28))
+        self.a2 = Article(None, 'Article 2', datetime(2005, 7, 31, 12, 29))
+        self.a1.save()
+        self.a2.save()
+        Article(None, 'Article 3', datetime(2005, 7, 31, 12, 30)).save()
+        Article(None, 'Article 4', datetime(2005, 7, 31, 12, 31)).save()
 
+    def test_combine_queries_with_or(self):
+        s1 = Article.objects.filter(id__exact=self.a1.id)
+        s2 = Article.objects.filter(id__exact=self.a2.id)
+        self.assertQuerysetEqual(s1 | s2,
+            ["<Article: Article 1>",
+             "<Article: Article 2>"])
+
+    def test_combine_queries_with_and(self):
+        s1 = Article.objects.filter(id__exact=self.a1.id)
+        s2 = Article.objects.filter(id__exact=self.a2.id)
+        self.assertQuerysetEqual(s1 & s2, [])
+
+class ModelTest(TestCase):
+    def test_function(self):
         # You can combine queries with & and |.
         s1 = Article.objects.filter(id__exact=a.id)
         s2 = Article.objects.filter(id__exact=a2.id)
